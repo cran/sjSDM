@@ -1,0 +1,17 @@
+README.md
+setup.py
+sjSDM_py/__init__.py
+sjSDM_py/dist_mvp.py
+sjSDM_py/model_LVM.py
+sjSDM_py/model_sjSDM.py
+sjSDM_py/model_svi.py
+sjSDM_py/optimizer.py
+sjSDM_py/utils_fa.py
+sjSDM_py.egg-info/PKG-INFO
+sjSDM_py.egg-info/SOURCES.txt
+sjSDM_py.egg-info/dependency_links.txt
+sjSDM_py.egg-info/requires.txt
+sjSDM_py.egg-info/top_level.txt
+tests/__init__.py
+tests/test_model_LVM.py
+tests/test_sjSDM.py

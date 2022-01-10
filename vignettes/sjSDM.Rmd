@@ -1,0 +1,289 @@
+---
+title: "sjSDM: a scalable joint Species Distribution Model"
+author: "Maximilian Pichler & Florian Hartig, Theoretical Ecology, University of Regensburg"
+date: "`r Sys.Date()`"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{sjSDM: a scalable joint Species Distribution Model}
+  \usepackage[utf8]{inputenc}
+  %\VignetteEngine{knitr::rmarkdown}
+abstract: "sjSDM is a scalable joint species distribution model based on Monte-Carlo intergration of the joint likelihood. \n \n \n"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, echo = F, message = F}
+set.seed(123)
+```
+
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.width=7, fig.height=4.5, fig.align='center', warning=FALSE, message=FALSE, cache = F)
+```
+
+
+# Getting started 
+
+Load the package via 
+
+```{r,eval=FALSE}
+library(sjSDM)
+```
+
+
+## Installing dependencies
+
+sjSDM depends on the Anaconda distribution of python and pytorch. You will get a warning if you don't have python installed. sjSDM depends on Anaconda which will be installed automatically if it is not available.
+
+To install the CPU version, run:
+```{r, eval = F}
+install_sjSDM()
+```
+
+For the GPU version (NVIDIA GPUs are only supported), run:
+```{r, eval = F}
+install_sjSDM(method = "gpu")
+```
+
+
+More details on and trouble-shooting for installing the necessary dependencies is explained in the vignette dependencies, call 
+
+```{r,eval = F}
+vignette("Dependencies", package = "sjSDM")
+```
+
+## Citing sjSDM
+
+To cite sjSDM in a publication, use 
+
+```{r,eval=FALSE}
+citation("sjSDM")
+```
+
+
+# Working with sjSDM
+
+sjSDM has a function to create test data. Here, we create a dataset with 3 environmental predictors, 5 species and 100 sites.
+
+```{r,eval=FALSE}
+com = simulate_SDM(env = 3L, species = 5L, sites = 100L)
+```
+
+
+# Fitting a model
+
+The model is then fit with the function sjSDM(). You have to provide predictors (can be also a data.frame) and response as matrices. 
+
+```{r,eval=FALSE}
+model = sjSDM(Y = com$response, env = com$env_weights, iter = 100L, se=TRUE)
+```
+
+
+## Interpreting model output
+
+Things you can do with the model output
+
+```{r,eval=FALSE}
+coef(model)
+summary(model)
+getCov(model)
+```
+
+## Adding quadratic predictors and interactions
+
+sjSDM supports formula description for the predictors.
+
+E.g. interaction with intercept and calculate p-values:
+```{r,eval=FALSE}
+model = sjSDM(Y = com$response, 
+              env = linear(data = com$env_weights, formula = ~ X1*X2,), iter = 50L, se = TRUE)
+summary(model)
+
+```
+
+E.g. quadratic effect without intercept:
+```{r,eval=FALSE}
+model = sjSDM(Y = com$response, 
+              env = linear(data = com$env_weights, formula = ~0+ I(X1^2)), iter = 50L, se = TRUE)
+summary(model)
+```
+
+
+# Handling spatial autocorrelation
+## Simulating spatial data
+jSDMs account for correlation between species within communities (sites), in real datasets, however, communities (sites) are often additionally correlated (== spatial autocorrelation).
+
+Let's first simulate test data:
+1) Simulate jSDM without a link (normal response)
+```{r,eval=FALSE}
+
+com = simulate_SDM(env = 3L, species = 5L, sites = 100L, 
+                   link = "identical", response = "identical")
+X = com$env_weights
+Y = com$response
+```
+
+2) add spatial residuals (create coordinates and use spatial distance matrix to draw autocorrelated residuals for each species)
+```{r,eval=FALSE}
+XYcoords = matrix(rnorm(200), 100, 2)+2
+WW = as.matrix(dist(XYcoords))
+spatialResiduals = mvtnorm::rmvnorm( 5L, sigma = exp(-WW))
+```
+
+3) Finish test data
+
+```{r,eval=FALSE}
+Ysp = Y + t(spatialResiduals)
+Y = ifelse(Ysp < 0, 0, 1) # multivariate probit model
+
+```
+
+## Fitting spatial jSDM
+Using spatial eigenvectors as additional predictors is a common approach:
+
+```{r,eval=FALSE}
+SPeigen = generateSpatialEV(XYcoords)
+
+model = sjSDM(Y, env = linear(X, ~.), spatial = linear(SPeigen, ~0+.), iter = 100L)
+summary(model)
+```
+
+
+# Further analyses
+## Anova
+Type I analysis of variance for the two/three different components (environment, biotic associations, and space (optional)).
+```{r,eval=FALSE}
+an = anova(model)
+plot(an)
+```
+
+## Importance
+We can also partition the effects of the different components
+```{r,eval=FALSE}
+imp = importance(model)
+plot(imp)
+```
+
+
+
+# Regularization
+## Regularization on abiotic coefficients
+sjSDM supports l1 (lasso) and l2 (ridge) regularization:
+* alpha is the weighting between lasso and ridge
+* alpha = 0.0 corresponds to pure lasso
+* alpha = 1.0 corresponds to pure ridge
+```{r,eval=FALSE}
+model = sjSDM(Y = com$response, env = linear(data = com$env_weights, formula = ~0+ I(X1^2),lambda = 0.5), iter = 50L)
+summary(model)
+```
+
+## Regularization on species-species associations
+We can do the same for the species associations:
+
+```{r,eval=FALSE}
+model = sjSDM(Y = com$response, 
+              env = linear(data = com$env_weights, formula = ~0+ I(X1^2),lambda = 0.5),
+              biotic = bioticStruct(lambda =0.1),
+              iter = 50L)
+summary(model)
+```
+
+
+
+## Regularization on the spatial model:
+
+```{r,eval=FALSE}
+
+model = sjSDM(Y, env = linear(X, ~X1+X2), spatial = linear(XYcoords, ~0+X1:X2, lambda = 0.4))
+summary(model)
+```
+
+
+
+# Fitting a non-linear (deep neural network) model 
+```{r,eval=FALSE}
+com = simulate_SDM(env = 3L, species = 5L, sites = 100L)
+X = com$env_weights
+Y = com$response
+
+# three fully connected layers with relu as activation function
+model = sjSDM(Y = Y, 
+              env = DNN(data = X, formula = ~., hidden = c(10L, 10L, 10L), activation = "relu"), 
+              iter = 50L, se = TRUE)
+summary(model)
+```
+
+
+
+The methods for sjSDM() work also for the non-linear model:
+```{r,eval=FALSE}
+getCov(model) # species association matrix
+pred = predict(model) # predict on fitted data
+pred = predict(model, newdata = X) # predict on new data
+```
+
+Extract and set weights of model:
+```{r,eval=FALSE}
+weights = getWeights(model) # get layer weights and sigma
+setWeights(model, weights)
+```
+
+Plot the training history:
+```{r,eval=FALSE}
+plot(model)
+```
+
+
+## We can also use a non-linear model as a spatial model:
+
+```{r,eval=FALSE}
+
+model = sjSDM(Y, env = linear(X, ~X1+X2), spatial = DNN(XYcoords, ~0+X1:X2, lambda = 0.4))
+summary(model)
+```
+
+## Or for both:
+```{r,eval=FALSE}
+
+model = sjSDM(Y, env = DNN(X, ~X1+X2), spatial = DNN(XYcoords, ~0+X1:X2, lambda = 0.4))
+summary(model)
+```
+
+
+# Fitting other distributions (e.g. species frequencies)
+sjSDM supports other responses than presence-absence data:
+Simulate non-presence-absence data:
+```{r,eval=FALSE}
+com = simulate_SDM(env = 3L, species = 5L, sites = 100L,link = "identical", response = "count") # samples from a Poisson distribution
+X = com$env_weights
+Y = com$response
+```
+
+## Poisson 
+```{r,eval=FALSE}
+model = sjSDM(Y, env = linear(X, ~.), se = TRUE, iter = 50L, family = poisson("log"))
+summary(model)
+```
+
+## Normal (gaussian)
+```{r,eval=FALSE}
+model = sjSDM(log(Y+0.01), env = linear(X, ~.), se = TRUE, iter = 50L, family = gaussian("identity"))
+summary(model)
+```
+
+
+## Workaround to use the default binomial with probit or logit link:
+The log-normalization is one way to transform species counts into quasi-probabilities in the range of [0,1]:
+```{r,eval=FALSE}
+zero_one = function(x) function(x) (x-min(x))/(max(x) -min(x))
+Y_pa = zero_one(log(Y+0.001))
+```
+
+We can use the quasi probabilities the same way as presence-absence data:
+```{r,eval=FALSE}
+
+model = sjSDM(Y_pa, env = linear(X, ~.), se = TRUE, iter = 50L, family = binomial("logit"))
+summary(model)
+```
