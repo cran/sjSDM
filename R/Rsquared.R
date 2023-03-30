@@ -1,8 +1,8 @@
 #' R-squared
 #' 
-#' calculate R-squared following Nagelkerke or McFadden
+#' calculate R-squared following McFadden or Nagelkerke
 #' @param model model
-#' @param method Nagelkerke or McFadden
+#' @param method McFadden or Nagelkerke
 #' 
 #' @details
 #' \loadmathjax 
@@ -22,19 +22,13 @@
 #' @import stats
 #' @export
 
-Rsquared = function(model, method = c("Nagelkerke", "McFadden")) {
+Rsquared = function(model, method = c("McFadden","Nagelkerke")) {
   
   method = match.arg(method)
   
-  if(is.null(model$Null)) {
-    if(inherits(model, "spatial")) {
-      model$Null = update(model, env_formula=~1, spatial_formula=~0)
-    } else {
-      model$Null = update(model, env_formula=~1)
-    }
-  }
-  N0 = -logLik(model$Null)[[1]]
-  N1 = -logLik(model)[[1]]
+  N0 = sum(get_null_ll(model))
+  
+  N1 = -sum(logLik(model, individual=TRUE )[[1]])
   
   if(method == "McFadden") {
     R2 = 1 - (N1/N0)

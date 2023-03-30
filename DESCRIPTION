@@ -1,7 +1,7 @@
 Package: sjSDM
 Type: Package
 Title: Scalable Joint Species Distribution Modeling
-Version: 1.0.3
+Version: 1.0.4
 Authors@R: 
     c(person(given = "Maximilian",
              family = "Pichler",
@@ -25,16 +25,16 @@ Imports: reticulate, stats, mvtnorm, utils, rstudioapi, abind,
         graphics, grDevices, Metrics, parallel, mgcv, Ternary, cli,
         crayon, ggplot2, checkmate, mathjaxr, ggtern
 Suggests: testthat, knitr, rmarkdown
-RoxygenNote: 7.2.0
+RoxygenNote: 7.2.1
 URL: https://theoreticalecology.github.io/s-jSDM/
 BugReports: https://github.com/TheoreticalEcology/s-jSDM/issues
 VignetteBuilder: knitr
 RdMacros: mathjaxr
 NeedsCompilation: no
-Packaged: 2022-09-14 13:05:19 UTC; maximilianpichler
+Packaged: 2023-03-30 15:51:57 UTC; maximilianpichler
 Author: Maximilian Pichler [aut, cre] (<https://orcid.org/0000-0003-2252-8327>),
   Florian Hartig [aut] (<https://orcid.org/0000-0002-6255-9059>),
   Wang Cai [ctb]
 Maintainer: Maximilian Pichler <maximilian.pichler@biologie.uni-regensburg.de>
 Repository: CRAN
-Date/Publication: 2022-09-14 13:20:02 UTC
+Date/Publication: 2023-03-30 16:50:02 UTC

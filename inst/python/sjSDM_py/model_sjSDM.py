@@ -2,9 +2,13 @@ import numpy as np
 import torch
 import itertools
 import sys
+from .utils_fa import covariance
 from typing import Union, Tuple, List, Optional, Callable
 from tqdm import tqdm
 from torch import nn, optim
+import warnings 
+
+warnings.filterwarnings("ignore")
 
 class Model_sjSDM:
     def __init__(self, device: str = "cpu", dtype: str = "float32"):
@@ -344,6 +348,11 @@ class Model_sjSDM:
         self.alpha = alpha
         self.mixed = mixed
         r_dim = self.output_shape
+        
+        if link == "nbinom":
+            self.theta = torch.ones([r_dim], requires_grad = True, dtype = self.dtype, device = self.device).to(self.device)
+            self.params.append([self.theta])
+            
         if not diag:
             low = -np.sqrt(6.0/(r_dim+df)) # type: ignore
             high = np.sqrt(6.0/(r_dim+df)) # type: ignore      
@@ -352,7 +361,7 @@ class Model_sjSDM:
             self._build_cov_constrain_function(l1 = l1, l2 = l2, reg_on_Cov = reg_on_Cov, reg_on_Diag = reg_on_Diag, inverse = inverse)
             self.params.append([self.sigma])
         else:
-            self.sigma = torch.zeros([r_dim, r_dim], dtype = self.dtype, device = self.device).to(self.device) # type: ignore
+            self.sigma = torch.eye(r_dim, dtype = self.dtype, device = self.device).to(self.device) # type: ignore
             self.df = r_dim
             self._loss_function = self._build_loss_function()
             self._build_cov_constrain_function(l1 = l1, l2 = l2, reg_on_Cov = reg_on_Cov, reg_on_Diag = reg_on_Diag, inverse = inverse)
@@ -530,7 +539,6 @@ class Model_sjSDM:
 
         logLik = []
         logLikReg = 0
-
         if type(SP) is np.ndarray:
             for step, (x, y, sp) in enumerate(dataLoader):
                 x = x.to(self.device, non_blocking=True)
@@ -854,6 +862,17 @@ class Model_sjSDM:
                     maxlogprob = logprob.max(dim = 0).values
                     Eprob = logprob.sub(maxlogprob).exp().mean(dim = 0)
                     return Eprob.log().neg().sub(maxlogprob)
+            elif self.link == "nbinom":
+                def tmp(mu: torch.Tensor, Ys: torch.Tensor, sigma: torch.Tensor, batch_size: int, sampling: int, df: int, alpha: float, device: str, dtype: torch.dtype):
+                    noise = torch.randn(size = [sampling, batch_size, df], device=torch.device(device),dtype=dtype)
+                    E = torch.einsum("ijk, lk -> ijl", [noise, sigma]).add(mu).exp()
+                    eps = 0.0001
+                    theta = 1.0/(torch.nn.functional.softplus(self.theta)+eps)
+                    probs = torch.clamp((1.0 - theta/(theta+E)) + eps, 0.0, 1.0-eps)
+                    logprob = torch.distributions.NegativeBinomial(total_count=theta, probs=probs).log_prob(Ys).sum(2)
+                    maxlogprob = logprob.max(dim = 0).values
+                    Eprob = logprob.sub(maxlogprob).exp().mean(dim = 0)
+                    return Eprob.log().neg().sub(maxlogprob)          
 
             elif self.link == "normal":
                 def tmp(mu: torch.Tensor, Ys: torch.Tensor, sigma: torch.Tensor, batch_size: int, sampling: int, df: int, alpha: float, device: str, dtype: torch.dtype):
@@ -866,6 +885,8 @@ class Model_sjSDM:
             elif self.link == "linear":
                 link_func = lambda value: torch.clamp(value, 0.0, 1.0)
             elif self.link == "count":
+                link_func = lambda value: value.exp()
+            elif self.link == "nbinom":
                 link_func = lambda value: value.exp()
             elif self.link == "normal":
                 link_func = lambda value: value
@@ -884,40 +905,46 @@ class Model_sjSDM:
     
         if individual:
             if self.link == "logit" or self.link == "probit":
-                @torch.jit.script
+                #@torch.jit.script
                 def tmp(mu: torch.Tensor, Ys: torch.Tensor, sigma: torch.Tensor, batch_size: int, sampling: int, df: int, alpha: float, device: str, dtype: torch.dtype):
                     noise = torch.randn(size = [sampling, batch_size, df], device=torch.device(device), dtype=dtype)
                     E = torch.sigmoid(   torch.einsum("ijk, lk -> ijl", [noise, sigma]).add(mu).mul(alpha)   ).mul(0.999999).add(0.0000005)
-                    logprob = E.log().mul(Ys).add((1.0 - E).log().mul(1.0 - Ys)).neg().sum(dim = 2).neg()
-                    logprob2 = E.log().mul(Ys).add((1.0 - E).log().mul(1.0 - Ys))#.neg().sum(dim = 2).neg()
-                    Prop = logprob2.exp().mean(0).log().abs() # 
-                    Prop = Prop.multiply( (1.0/Prop.sum(dim=1)).reshape([-1, 1]).repeat_interleave(Ys.shape[1],1) )
+                    logprob = E.log().mul(Ys).add((1.0 - E).log().mul(1.0 - Ys)).neg()#.sum(dim = 2).neg()
+                    Prop = logprob/logprob.sum(dim = 2).reshape([sampling, batch_size, 1])
+                    logprob = logprob.sum(dim = 2).neg()
                     maxlogprob = logprob.max(dim = 0).values
                     Eprob = logprob.sub(maxlogprob).exp().mean(dim = 0)
-                    return Eprob.log().neg().sub(maxlogprob).reshape([-1,1]).repeat_interleave(Ys.shape[1],1)*Prop
+                    return Eprob.log().neg().sub(maxlogprob).reshape([batch_size, 1])
             elif self.link == "linear":
                 @torch.jit.script
                 def tmp(mu: torch.Tensor, Ys: torch.Tensor, sigma: torch.Tensor, batch_size: int, sampling: int, df: int, alpha: float, device: str, dtype: torch.dtype):
                     noise = torch.randn(size = [sampling, batch_size, df], device=torch.device(device), dtype=dtype)
                     E = torch.clamp(torch.einsum("ijk, lk -> ijl", [noise, sigma]).add(mu).mul(alpha), 0.0, 1.0).mul(0.999999).add(0.0000005)
-                    logprob = E.log().mul(Ys).add((1.0 - E).log().mul(1.0 - Ys)).neg().sum(dim = 2).neg()
-                    logprob2 = E.log().mul(Ys).add((1.0 - E).log().mul(1.0 - Ys))#.neg().sum(dim = 2).neg()
-                    Prop = logprob2.exp().mean(0).log().abs() # 
-                    Prop = Prop.multiply( (1.0/Prop.sum(dim=1)).reshape([-1, 1]).repeat_interleave(Ys.shape[1],1) )
+                    logprob = E.log().mul(Ys).add((1.0 - E).log().mul(1.0 - Ys)).neg() #.sum(dim = 2).neg()
+                    logprob = logprob.sum(dim = 2).neg()
                     maxlogprob = logprob.max(dim = 0).values
                     Eprob = logprob.sub(maxlogprob).exp().mean(dim = 0)
-                    return Eprob.log().neg().sub(maxlogprob).reshape([-1,1]).repeat_interleave(Ys.shape[1],1)*Prop
+                    return Eprob.log().neg().sub(maxlogprob).reshape([batch_size, 1])
             elif self.link == "count":
                 def tmp(mu: torch.Tensor, Ys: torch.Tensor, sigma: torch.Tensor, batch_size: int, sampling: int, df: int, alpha: float, device: str, dtype: torch.dtype):
                     noise = torch.randn(size = [sampling, batch_size, df], device=torch.device(device),dtype=dtype)
                     E = torch.einsum("ijk, lk -> ijl", [noise, sigma]).add(mu).exp()
-                    logprob = torch.distributions.Poisson(rate=E).log_prob(Ys).sum(2)
-                    logprob2 = torch.distributions.Poisson(rate=E).log_prob(Ys)#.sum(2)
-                    Prop = logprob2.exp().mean(0).log().abs() # 
-                    Prop = Prop.multiply( (1.0/Prop.sum(dim=1)).reshape([-1, 1]).repeat_interleave(Ys.shape[1],1) )
+                    logprob = torch.distributions.Poisson(rate=E).log_prob(Ys)#.sum(2)
+                    logprob = logprob.sum(dim = 2)# .neg()
                     maxlogprob = logprob.max(dim = 0).values
                     Eprob = logprob.sub(maxlogprob).exp().mean(dim = 0)
-                    return Eprob.log().neg().sub(maxlogprob).reshape([-1,1]).repeat_interleave(Ys.shape[1],1)*Prop
+                    return Eprob.log().neg().sub(maxlogprob).reshape([batch_size, 1])
+            elif self.link == "nbinom":
+                def tmp(mu: torch.Tensor, Ys: torch.Tensor, sigma: torch.Tensor, batch_size: int, sampling: int, df: int, alpha: float, device: str, dtype: torch.dtype):
+                    noise = torch.randn(size = [sampling, batch_size, df], device=torch.device(device),dtype=dtype)
+                    E = torch.einsum("ijk, lk -> ijl", [noise, sigma]).add(mu).exp()
+                    eps = 0.0001
+                    theta = 1.0/(torch.nn.functional.softplus(self.theta)+eps)
+                    probs = torch.clamp((1.0 - theta/(theta+E)) + eps, 0.0, 1.0-eps)
+                    logprob = torch.distributions.NegativeBinomial(total_count=theta, probs=probs).log_prob(Ys).sum(2)
+                    maxlogprob = logprob.max(dim = 0).values
+                    Eprob = logprob.sub(maxlogprob).exp().mean(dim = 0)
+                    return Eprob.log().neg().sub(maxlogprob).reshape([batch_size, 1])
 
             elif self.link == "normal":
                 def tmp(mu: torch.Tensor, Ys: torch.Tensor, sigma: torch.Tensor, batch_size: int, sampling: int, df: int, alpha: float, device: str, dtype: torch.dtype):
@@ -972,6 +999,20 @@ class Model_sjSDM:
             return [(lambda p: p.data.cpu().numpy())(p) for p in self.spatial.parameters()]
         else:
             return None
+        
+    @property
+    def get_theta(self):
+        if self.theta is not None:
+            return self.theta.data.cpu().numpy()
+        else:
+            return None
+        
+    def set_theta(self, w: np.ndarray):
+        if self.theta is None:
+            return None
+        else:
+            with torch.no_grad():
+                self.theta.data = torch.tensor(w, device=self.device, dtype=self.dtype).data          
 
     def set_spatial_weights(self, w: np.ndarray):
         """Set spatial coefficients

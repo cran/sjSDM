@@ -1,5 +1,23 @@
+# sjSDM 1.0.4
+## New features
+
+* Anova function is now based on conditional probabilities to better separate 
+  the biotic components
+* Anova can use shared components (plot(...,internal=TRUE, add_shared=TRUE))
+* Simulation methods for all supported families (binomial, poisson, and
+  negative binomial)
+* Support for negative binomial distribution
+* plotInternalStructure for plotting internal metacommunity structure
+* getCor to return species-species association matrix
+
+
+## Bug fixes
+
+* fixed Rsquared(...) #113 (thanks to @AndrewCSlater)
+* fixed whitespaces in species names #115 @dansmi-hub
+
 # sjSDM 1.0.3
-## Mino changes
+## Minor changes
 
 * changed weight_decay in 'RMSprop' from 0.01 to 0.0001 
 

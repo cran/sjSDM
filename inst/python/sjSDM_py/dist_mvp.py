@@ -4,6 +4,9 @@ from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
+import warnings 
+
+warnings.filterwarnings("ignore")
 
 class MultivariateProbit(TorchDistribution):
     arg_constraints = {'loc': constraints.real_vector}
@@ -110,9 +113,12 @@ class MultivariateProbit(TorchDistribution):
         return loss.view(shape[:-1])
 
 
-def MVP_logLik(Y, pred, sigma, device, batch_size=25, sampling=1000, link="probit", individual=False):
+def MVP_logLik(Y, X, sigma, device, dtype, batch_size=25, alpha = 1.0, sampling=1000, link="probit", individual=False, theta = None):
 
     torch.set_default_tensor_type('torch.FloatTensor')
+    
+    if dtype is not None:
+        dtype = torch.float32
 
     if device.type == 'cuda' and torch.cuda.is_available():
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
@@ -125,32 +131,44 @@ def MVP_logLik(Y, pred, sigma, device, batch_size=25, sampling=1000, link="probi
         pin_memory = True
 
     if link=="probit":
-        link_func = lambda value: torch.distributions.Normal(0.0, 1.0).cdf(value)
+        link_func = lambda value: torch.sigmoid(value)
     elif link=="linear":
         link_func = lambda value: torch.clamp(value, 0.0, 1.0)
     elif link=="logit":
-        link_func = lambda value: torch.sigmoid(value.mul(1.70169))
+        link_func = lambda value: torch.sigmoid(value)
+    elif link=="count":
+        link_func = lambda value: torch.exp(value)
+    elif link=="nbinom":
+        link_func = lambda value: torch.exp(value)
+    
+    if theta is not None:
+        theta = torch.tensor(theta, dtype=dtype, device=torch.device(device))
 
-    data = torch.utils.data.TensorDataset(torch.tensor(Y, dtype=torch.float32, device=torch.device('cpu')), torch.tensor(pred, dtype=torch.float32, device=torch.device('cpu')))
+    data = torch.utils.data.TensorDataset(torch.tensor(Y, dtype=dtype, device=torch.device('cpu')), torch.tensor(X, dtype=dtype, device=torch.device('cpu')))
     DataLoader = torch.utils.data.DataLoader(data, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=pin_memory, drop_last=False)
     torch.cuda.empty_cache()
-    sigma=torch.tensor(sigma, dtype=torch.float32, device=torch.device(device))
+    sigma=torch.tensor(sigma, dtype=dtype, device=torch.device(device))
     logLik = []
     for step, (y, pred) in enumerate(DataLoader):
         y = y.to(device, non_blocking=True)
         pred = pred.to(device, non_blocking=True)
-
-        noise = torch.randn(size = [sampling, batch_size, sigma.shape[1]], device=torch.device(device))
-        E = link_func(torch.tensordot(noise, sigma.t(), dims = 1).add(pred)).mul(0.999999).add(0.0000005)
-        logprob = E.log().mul(y).add((1.0 - E).log().mul(1.0 - y)).neg().sum(dim = 2).neg()
+        noise = torch.randn(size = [sampling, pred.shape[0], sigma.shape[1]], device=torch.device(device), dtype=dtype)
+        E = link_func( torch.tensordot(noise, sigma.t(), dims = 1).add(pred).mul(alpha) ).mul(0.999999).add(0.0000005)
+        if link in ["probit", "linear", "logit"] : 
+            logprob = E.log().mul(y).add((1.0 - E).log().mul(1.0 - y)).neg().sum(dim = 2).neg()
+        elif link == "count":
+            logprob = torch.distributions.Poisson(rate=E).log_prob(y).sum(2)
+        elif link == "nbinom":
+            eps = 0.0001
+            theta_tmp = 1.0/(torch.nn.functional.softplus(theta)+eps)
+            probs = torch.clamp((1.0 - theta_tmp/(theta_tmp+E)) + eps, 0.0, 1.0-eps)
+            logprob = torch.distributions.NegativeBinomial(total_count=theta_tmp, probs=probs).log_prob(y).sum(2)
         maxlogprob = logprob.max(dim = 0).values
         Eprob = logprob.sub(maxlogprob).exp().mean(dim = 0)
         loss = Eprob.log().neg().sub(maxlogprob)
         logLik.append(loss.data)
-
     if individual is not True:
         logLik = torch.cat(logLik).sum().data.cpu().numpy()
     else:
-        logLik = torch.cat(logLik).data.cpu().numpy()
-    
+        logLik = torch.cat(logLik).data.cpu().numpy()    
     return logLik
