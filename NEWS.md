@@ -1,3 +1,12 @@
+# sjSDM 1.0.5
+## New features
+* Pass custom test indices to sjSDM function via CV argument
+* improve reproducibility (seeding)
+* improve stability of ANOVA
+
+## Bug fixes
+* fixed small bug in the calculation of the partial Rsquareds
+
 # sjSDM 1.0.4
 ## New features
 

@@ -4,31 +4,16 @@
 \alias{plot.sjSDMimportance}
 \title{Plot importance}
 \usage{
-\method{plot}{sjSDMimportance}(
-  x,
-  y,
-  contour = FALSE,
-  col.points = "#24526e",
-  cex.points = 1.2,
-  pch = 19,
-  col.contour = "#ffbf02",
-  ...
-)
+\method{plot}{sjSDMimportance}(x, y, col.points = "#24526e", cex.points = 1.2, ...)
 }
 \arguments{
 \item{x}{a model fitted by \code{\link{importance}}}
 
 \item{y}{unused argument}
 
-\item{contour}{plot contour or not}
-
 \item{col.points}{point color}
 
 \item{cex.points}{point size}
-
-\item{pch}{point symbol}
-
-\item{col.contour}{contour color}
 
 \item{...}{Additional arguments to pass to \code{plot()}}
 }

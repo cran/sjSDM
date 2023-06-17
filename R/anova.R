@@ -8,10 +8,10 @@
 #' 
 #' @description
 #' 
-#' Calculate type II anova.
+#' Calculates type II anova.
 #' 
-#' 
-#' Shared contributions (e.g. between space and environment) are also calculated and can be visualized via \code{\link{plot.sjSDManova}}.
+#' Shared contributions (e.g. between space and environment) are also calculated (and divided proportionally) and can be optionally visualized via \code{\link{plot.sjSDManova}} with \code{add_shared=TRUE}.
+#' The anova can get unstable for many species and few occurrences/observations. We recommend using large numbers for 'samples'.
 #' 
 #' @return 
 #' An S3 class of type 'sjSDManova' including the following components:
@@ -36,11 +36,13 @@ anova.sjSDM = function(object, samples = 5000L, ...) {
   samples = as.integer(samples)
   object = checkModel(object)
   
+  pkg.env$fa$set_seed(object$seed)
+  
   if(object$family$family$family == "gaussian") stop("gaussian not yet supported")
   
   object$settings$se = FALSE
   
-  null_m = -get_null_ll(object)
+  null_m = -get_null_ll(object, ...)
   
   full_m = get_conditional_lls(object, null_m, sampling = samples, ...)
   
@@ -56,26 +58,22 @@ anova.sjSDM = function(object, samples = 5000L, ...) {
     m = update(object, env_formula = ~as.factor(1:nrow(object$data$X)), spatial_formula= ~0, biotic=bioticStruct(diag = FALSE ))
     SAT_m = get_conditional_lls(m, null_m, sampling = samples, ...)
     
-    F_A  = (null_m - full_m) - B_m
-    F_B  = (null_m - full_m) - A_m
-    F_AB =  (null_m - full_m) - F_A - F_B
+    A_wo = A_m - null_m
+    B_wo = B_m - null_m
+    full_wo = full_m - null_m
     
-    full = full_m
-    null = null_m
-    sat =  SAT_m
+    F_A = full_wo - B_wo
+    F_B = full_wo - A_wo
+    F_AB = full_wo - A_wo-B_wo
+
     anova_rows = c("Null", "F_A", "F_B", "Full")
     names(anova_rows) = c("Null", "Abiotic", "Biotic", "Full")
-    results = data.frame(models = c("F_A", "F_B","F_AB","A","B", "Full", "Saturated", "Null"),
-                         ll = -c(sum(null_m) - sum(F_A), sum(null_m) -sum(F_B), sum(null_m) - sum(F_AB),sum(A_m),sum(B_m), sum(full), sum(sat), sum(null)))
-    results_ind = list("F_A"=-(null_m - F_A), "F_B"=-(null_m -F_B), "F_AB"=-(null_m -F_AB),
-                       "A"=-A_m, "B"=-B_m,
-                       "Full"=-full, "Saturated"=-sat, "Null"=-null)
+    results = data.frame(models = c("F_A", "F_B","F_AB","Full", "Saturated", "Null"),
+                         ll = -c(sum(null_m) + sum(F_A), sum(null_m)  + sum(F_B), sum(null_m)  + sum(F_AB), sum(full_m), sum(SAT_m), sum(null_m)))
+    results_ind = list("F_A"=-(null_m + F_A), "F_B"=-(null_m +F_B), "F_AB"=-(null_m + F_AB), "A" = -A_m, "B" = -B_m, "Full"=-full_m, "Saturated"=-SAT_m, "Null"=-null_m)
     
   } else {
     out$spatial = TRUE
-    zero_like = function(M) {
-      return(matrix(0.0, nrow(M), ncol(M)))
-    }
     
     s_form = stats::as.formula(paste0(as.character(object$settings$spatial$formula), collapse = ""))
     m = update(object, env_formula = NULL, spatial_formula= ~0, biotic=bioticStruct(diag = TRUE ))
@@ -93,28 +91,29 @@ anova.sjSDM = function(object, samples = 5000L, ...) {
     m = update(object, env_formula = ~as.factor(1:nrow(object$data$X)), spatial_formula= ~0, biotic=bioticStruct(diag = FALSE ))
     SAT_m = get_conditional_lls(m, null_m, sampling = samples, ...)
     
-    F_AB =   S_m - full_m
-    F_AS =   B_m - full_m
-    F_BS =   A_m - full_m
-    F_A  = (null_m - full_m) - F_BS
-    F_B  = (null_m - full_m) - F_AS
-    F_S  = (null_m - full_m) - F_AB
-    F_ABS =  (null_m - full_m) - F_BS - F_AB - F_AS - F_A - F_B - F_S
     
-    full = full_m
-    null = null_m
-    sat =  SAT_m
+    A_wo = A_m - null_m
+    B_wo = B_m - null_m
+    S_wo = S_m - null_m
+    AB_wo = AB_m - null_m
+    AS_wo = AS_m - null_m
+    BS_wo = BS_m - null_m
+    full_wo = full_m - null_m
     
-    results = data.frame(models = c("F_A", "F_B","F_S","F_AB","F_AS", "F_BS", "F_ABS",
-                                    "A", "B", "S", "AB", "AS", "BS", "Full", "Saturated", "Null"),
-                         ll = -c(sum(null_m) - sum(F_A), sum(null_m) - sum(F_B),sum(null_m) - sum(F_S), 
-                                 sum(null_m) - sum(F_AB), sum(null_m) - sum(F_AS), sum(null_m) - sum(F_BS), sum(null_m) - sum(F_ABS), 
-                                 sum(A_m), sum(B_m), sum(S_m), sum(AB_m), sum(AS_m), sum(BS_m),
-                                 sum(full), sum(sat), sum(null)))
-    
-    results_ind = list("F_A"=-(null_m - F_A), "F_B"=-(null_m -F_B),"F_S"=-(null_m -F_S), "F_AB"=-(null_m -F_AB),"F_AS"=-(null_m -F_AS), "F_BS"=-(null_m -F_BS), "F_ABS"=-(null_m -F_ABS), 
-                       "A"=-A_m, "B"=-B_m,"S"=-S_m, "AB"=-AB_m,"AS"=-AS_m, "BS"=-BS_m,
-                       "Full"=-full, "Saturated"=-sat, "Null"=-null)
+    F_A = full_wo - BS_wo
+    F_B = full_wo - AS_wo
+    F_S = full_wo - AB_wo
+    F_AS = full_wo - B_wo - F_A - F_S
+    F_AB = full_wo - S_wo - F_A - F_B
+    F_BS = full_wo - A_wo - F_S - F_B
+    F_ABS = full_wo - F_BS - F_AB- F_AS- F_A- F_B - F_S        
+    results = data.frame(models = c("F_A", "F_B","F_S","F_AB","F_AS", "F_BS", "F_ABS", "Full", "Saturated", "Null"),
+                         ll = -c(sum(null_m) + sum(F_A), sum(null_m) + sum(F_B),sum(null_m) + sum(F_S), 
+                                 sum(null_m) + sum(F_AB), sum(null_m) + sum(F_AS), sum(null_m) + sum(F_BS), sum(null_m) + sum(F_ABS), 
+                                 sum(null_m) + sum(full_wo), sum(SAT_m), sum(null_m)))
+    results_ind = list("F_A"=-(null_m + F_A), "F_B"=-(null_m + F_B),"F_S"=-(null_m +F_S), "F_AB"=-(null_m +F_AB),"F_AS"=-(null_m + F_AS), 
+                       "F_BS"=-(null_m + F_BS), "F_ABS"=-(null_m + F_ABS), "A" = -A_m, "B" = -B_m, "S" = -S_m, AB = AB_m, AS = AS_m, BS = BS_m,
+                       "Full"=-(full_m), "Saturated"= -(SAT_m), "Null"=-null_m)
     
     anova_rows = c("Null", "F_A", "F_B", "F_S", "Full")
     names(anova_rows) = c("Null", "Abiotic", "Biotic", "Spatial", "Full")
@@ -126,22 +125,25 @@ anova.sjSDM = function(object, samples = 5000L, ...) {
   R21 = function(a, b) return(1-exp(2/(nrow(object$data$Y))*(-a+b)))
   results$`R2 Nagelkerke` = R21(rep(-results$ll[which(results$models == "Null", arr.ind = TRUE)], length(results$ll)), - results$ll)
   R22 = function(a, b) 1 - (b/a)
-  results$`R2 McFadden`= R22(rep(-results$ll[which(results$models == "Null", arr.ind = TRUE)], length(results$ll)), - results$ll)
+  results$`R2 McFadden`= R22(rep(results$ll[which(results$models == "Null", arr.ind = TRUE)], length(results$ll)), results$ll)
   
   # individual
   Residual_deviance_ind = lapply(results_ind, function(r) r - results_ind$Saturated)
-  Deviance_ind = lapply(Residual_deviance_ind, function(r) r - Residual_deviance_ind$Null)
+  Deviance_ind = lapply(Residual_deviance_ind, function(r) Residual_deviance_ind$Null - r)
   R211 = function(a, b, n=1) return(1-exp(2/(n)*(-a+b)))   # divide by what?
-  R2_Nagelkerke_ind = lapply(results_ind, function(r) R211(-colSums(results_ind$Null), -colSums(r), n=nrow(object$data$Y)))
-  R2_Nagelkerke_sites = lapply(results_ind, function(r) R211(-rowSums(results_ind$Null), -rowSums(r), n=ncol(object$data$Y)))
+  R2_Nagelkerke_ind = lapply(results_ind, function(r) R211(colSums(results_ind$Null), colSums(r), n=nrow(object$data$Y)))
+  R2_Nagelkerke_sites = lapply(results_ind, function(r) R211(rowSums(results_ind$Null), rowSums(r), n=ncol(object$data$Y)))
   R222 = function(a, b) 1 - (b/a)
-  R2_McFadden_ind = lapply(results_ind, function(r) R222(-colSums(results_ind$Null), -colSums(r)))
-  R2_McFadden_sites = lapply(results_ind, function(r) R222(-rowSums(results_ind$Null), -rowSums(r)))
+  R2_McFadden_ind = lapply(results_ind, function(r) R222(colSums(results_ind$Null), colSums(r)))
+  R2_McFadden_sites = lapply(results_ind, function(r) R222(rowSums(results_ind$Null), rowSums(r)))
   
   R2_McFadden_ind_shared = get_shared_anova(R2_McFadden_ind)
   R2_McFadden_sites_shared = get_shared_anova(R2_McFadden_sites)
   R2_Nagelkerke_ind_shared = get_shared_anova(R2_Nagelkerke_ind)
   R2_Nagelkerke_sites_shared = get_shared_anova(R2_Nagelkerke_sites)
+  
+  R2_McFadden_ind$Full = correct_R2(R2_McFadden_ind$Full)
+  R2_McFadden_sites$Full = correct_R2(R2_McFadden_sites$Full)
   
   to_print = results
   rownames(to_print) = to_print$models
@@ -166,13 +168,21 @@ anova.sjSDM = function(object, samples = 5000L, ...) {
                    R2_McFadden_shared = R2_McFadden_sites_shared)
   out$lls = list(results_ind)
   class(out) = "sjSDManova"
-  return(invisible(out))
+  return(out)
+}
+
+correct_R2 = function(R2) {
+  R2 = ifelse(R2 < 0, 0, R2)
+  R2 = ifelse(R2 > 1.000, 0, R2)
+  return(R2)
 }
 
 get_conditional_lls = function(m, null_m, ...) {
   joint_ll = rowSums( logLik(m, individual = TRUE, ...)[[1]] )
-  raw_ll = 
+ 
+   raw_ll = 
     sapply(1:ncol(m$data$Y), function(i) {
+      
       reticulate::py_to_r(
         pkg.env$fa$MVP_logLik(m$data$Y[,-i], 
                               predict(m, type = "raw")[,-i], 
@@ -186,9 +196,9 @@ get_conditional_lls = function(m, null_m, ...) {
                               theta = m$theta[-i],
                               ...
                               )
-        )
+        ) 
     })
-  raw_conditional_ll = (joint_ll - raw_ll )
+  raw_conditional_ll = -( (-joint_ll) - (-raw_ll ))
   diff_ll = colSums(null_m - raw_conditional_ll)
   rates = diff_ll/sum(diff_ll)
   rescaled_conditional_lls = null_m - matrix(rates, nrow = nrow(m$data$Y), ncol = ncol(m$data$Y), byrow = TRUE) * (rowSums(null_m)-joint_ll)
@@ -200,7 +210,7 @@ get_shared_anova = function(R2objt, spatial = TRUE) {
     F_BS = R2objt$Full-R2objt$A
     F_AB = R2objt$Full-R2objt$S
     F_AS = R2objt$Full-R2objt$B
-    F_A = R2objt$Full-R2objt$BS
+    F_A = R2objt$Full- R2objt$BS
     F_B =  R2objt$Full-R2objt$AS
     F_S =  R2objt$Full-R2objt$AB
     F_BS = F_BS - F_B -F_S
@@ -218,18 +228,38 @@ get_shared_anova = function(R2objt, spatial = TRUE) {
     B = F_B + F_AB*abs(F_B)/(abs(F_A)+abs(F_B))
     S = 0
   }
-  return(list(A = A, B = B, S = S, R2 = A+B+S))
+  R2 = correct_R2(R2objt$Full)
+  return(list(F_A = A, F_B = B, F_S = S, R2 = R2))
 }
 
-get_null_ll = function(object) {
+get_null_ll = function(object, ...) {
+  
+  object_tmp = object
+  object_tmp$settings$se = FALSE
+  
+  if(inherits(object, "spatial ")) null_pred = predict(update(object_tmp, env_formula = ~1, spatial_formula = ~0, biotic = bioticStruct(diag = TRUE)))
+  else null_pred = predict(update(object_tmp, env_formula = ~1, biotic = bioticStruct(diag = TRUE)))
+  
   if(object$family$family$family == "binomial") {
-    null_m = stats::dbinom( object$data$Y, 1, 0.5, log = TRUE)
+    null_m = stats::dbinom( object$data$Y, 1, null_pred, log = TRUE)
   } else if(object$family$family$family == "poisson") {
-    null_m = stats::dpois( object$data$Y, 1, log = TRUE)
+    null_m = stats::dpois( object$data$Y, null_pred, log = TRUE)
   } else if(object$family$family$family == "nbinom") {
-    null_m = stats::dpois( object$data$Y, 1, log = TRUE)
+    check_module()
+    torch = pkg.env$torch
+    theta = object$theta
+    theta = 1.0/(softplus(theta)+0.0001)
+    theta = matrix(theta, nrow = nrow(null_pred), ncol = ncol(null_pred), byrow = TRUE)
+    probs = (1.0 - theta/(theta+null_pred))+0.0001 
+    probs = ifelse(probs < 0.0, 0.0, probs)
+    probs = ifelse(probs > 1.0, 1.0-0.0001, probs )
+    theta = torch$tensor(theta, dtype = torch$float32)
+    probs = torch$tensor(probs, dtype = torch$float32)
+    YT = torch$tensor(object$data$Y, dtype = torch$float32)
+    null_m = force_r(torch$distributions$NegativeBinomial(total_count=theta, probs=probs)$log_prob(YT)$cpu()$data$numpy())
   } else if(object$family$family$family == "gaussian") {
-    null_m = stats::dnorm( object$data$Y, 0, 1.0, log = TRUE)
+    warning("family = gaussian() is not fully supported yet.")
+    null_m = stats::dnorm(object$data$Y, mean = null_pred, log = TRUE)
   }
     
   return(null_m)
@@ -278,7 +308,7 @@ print.sjSDManova = function(x, ...) {
 #' @export
 plotInternalStructure = function(object,  
                                  Rsquared = c("McFadden", "Nagelkerke"), 
-                                 add_shared = TRUE,
+                                 add_shared = FALSE,
                                  env_deviance = NULL,
                                  suppress_plotting = FALSE) {
   Rsquared = match.arg(Rsquared)
@@ -328,9 +358,9 @@ plotInternalStructure = function(object,
 #' @export
 plot.sjSDManova = function(x, 
                            y, 
-                           type = c("McFadden", "Deviance", "Nagelkerke"), 
+                           type = c( "McFadden", "Deviance", "Nagelkerke"), 
                            internal = FALSE,
-                           add_shared = TRUE,
+                           add_shared = FALSE,
                            cols = c("#7FC97F","#BEAED4","#FDC086"),
                            alpha=0.15, 
                            env_deviance = NULL,
@@ -406,7 +436,7 @@ plot.sjSDManova = function(x,
           env = ifelse(x$sites[[type]]$F_A<0, 0, x$sites[[type]]$F_A),
           spa = ifelse(x$sites[[type]]$F_S<0, 0, x$sites[[type]]$F_S),
           codist = ifelse(x$sites[[type]]$F_B<0, 0, x$sites[[type]]$F_B),
-          r2  = ifelse(x$sites[[type]]$Full<0, 0, x$sites[[type]]$Full)/length(x$sites[[type]]$Full)
+          r2  = ifelse(x$sites[[type]]$Full<0, 0, x$sites[[type]]$Full)#/length(x$sites[[type]]$Full)
         )
       internals[[1]] = df
       names(internals)[1] = "Sites"
@@ -415,7 +445,7 @@ plot.sjSDManova = function(x,
           env = ifelse(x$species[[type]]$F_A<0, 0, x$species[[type]]$F_A),
           spa = ifelse(x$species[[type]]$F_S<0, 0, x$species[[type]]$F_S),
           codist = ifelse(x$species[[type]]$F_B<0, 0, x$species[[type]]$F_B),
-          r2  = ifelse(x$species[[type]]$Full<0, 0, x$species[[type]]$Full)/length(x$species[[type]]$Full)
+          r2  = ifelse(x$species[[type]]$Full<0, 0, x$species[[type]]$Full)#/length(x$species[[type]]$Full)
         )
       
       internals[[2]] = df
@@ -423,19 +453,19 @@ plot.sjSDManova = function(x,
     } else {
       type = paste0(type, "_shared")
       df = data.frame(
-        env = ifelse(x$sites[[type]]$A<0, 0, x$sites[[type]]$A),
-        spa = ifelse(x$sites[[type]]$S<0, 0, x$sites[[type]]$S),
-        codist = ifelse(x$sites[[type]]$B<0, 0, x$sites[[type]]$B),
-        r2  = ifelse(x$sites[[type]]$R2<0, 0, x$sites[[type]]$R2)/length(x$sites[[type]]$R2)
+        env = ifelse(x$sites[[type]]$F_A<0, 0, x$sites[[type]]$F_A),
+        spa = ifelse(x$sites[[type]]$F_S<0, 0, x$sites[[type]]$F_S),
+        codist = ifelse(x$sites[[type]]$F_B<0, 0, x$sites[[type]]$F_B),
+        r2  = ifelse(x$sites[[type]]$R2<0, 0, x$sites[[type]]$R2)#/length(x$sites[[type]]$R2)
       )
       internals[[1]] = df
       names(internals)[1] = "Sites"
       
       df = data.frame(
-        env = ifelse(x$species[[type]]$A<0, 0, x$species[[type]]$A),
-        spa = ifelse(x$species[[type]]$S<0, 0, x$species[[type]]$S),
-        codist = ifelse(x$species[[type]]$B<0, 0, x$species[[type]]$B),
-        r2  = ifelse(x$species[[type]]$R2<0, 0, x$species[[type]]$R2)/length(x$species[[type]]$R2)
+        env = ifelse(x$species[[type]]$F_A<0, 0, x$species[[type]]$F_A),
+        spa = ifelse(x$species[[type]]$F_S<0, 0, x$species[[type]]$F_S),
+        codist = ifelse(x$species[[type]]$F_B<0, 0, x$species[[type]]$F_B),
+        r2  = ifelse(x$species[[type]]$R2<0, 0, x$species[[type]]$R2)#/length(x$species[[type]]$R2)
       )
       
       internals[[2]] = df
@@ -457,7 +487,7 @@ plot.sjSDManova = function(x,
         
         r2max = ceiling(max(internals[[i]]$r2)*1e2)/1e2
         plt = 
-          ggtern::ggtern(internals[[i]], ggplot2::aes_string(x = "env", z = "spa", y = "codist", size = "r2")) +
+          ggtern::ggtern(internals[[i]], ggplot2::aes_string(x = "env", z = "spa", y = "codist", size = "r2"))+
             ggtern::scale_T_continuous(limits=c(0,1),
                                        breaks=seq(0, 1,by=0.2),
                                        labels=seq(0,1, by= 0.2)) +
@@ -472,9 +502,9 @@ plot.sjSDManova = function(x,
                           x = "E",
                           xarrow = "Environment",
                           y = "C",
-                          yarrow = "Co-Distribution",
+                          yarrow = "Species associations",
                           z = "S", 
-                          zarrow = "Spatial Autocorrelation") +
+                          zarrow = "Space") +
             ggtern::theme_bw() +
             ggtern::theme_showarrows() +
             ggtern::theme_arrowlong() +

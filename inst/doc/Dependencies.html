@@ -12,7 +12,7 @@
 
 <meta name="author" content="Maximilian Pichler &amp; Florian Hartig, Theoretical Ecology, University of Regensburg" />
 
-<meta name="date" content="2023-03-30" />
+<meta name="date" content="2023-06-16" />
 
 <title>sjSDM: Help with the installation of dependencies</title>
 
@@ -121,13 +121,20 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; }
   for (var i = 0; i < sheets.length; i++) {
     if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
     try { var rules = sheets[i].cssRules; } catch (e) { continue; }
-    for (var j = 0; j < rules.length; j++) {
+    var j = 0;
+    while (j < rules.length) {
       var rule = rules[j];
       // check if there is a div.sourceCode rule
-      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") continue;
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
       var style = rule.style.cssText;
       // check if color or background-color is set
-      if (rule.style.color === '' && rule.style.backgroundColor === '') continue;
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
       // replace div.sourceCode by a pre.sourceCode rule
       sheets[i].deleteRule(j);
       sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
@@ -345,7 +352,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 dependencies</h1>
 <h4 class="author">Maximilian Pichler &amp; Florian Hartig, Theoretical
 Ecology, University of Regensburg</h4>
-<h4 class="date">2023-03-30</h4>
+<h4 class="date">2023-06-16</h4>
 <div class="abstract">
 <p class="abstract">Abstract</p>
 <p>This document explains how to install dependencies for the sjSDM
@@ -399,10 +406,9 @@ should be named ‘r-sjsdm’</li>
 <code>r sjSDM::install_sjSDM()</code> ).doesn’t work because of white
 spaces in the user’s name. But you can easily download and install
 ‘conda’ on your own:</p>
-<p>Download and install the latest <a href="https://www.anaconda.com/products/distribution">‘conda’
-version</a></p>
+<p>Download and install the latest <a href="https://www.anaconda.com/download/">‘conda’ version</a></p>
 <p>Afterwards run:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">install_sjSDM</span>(<span class="at">version =</span> <span class="fu">c</span>(<span class="st">&quot;gpu&quot;</span>)) <span class="co"># or &quot;cpu&quot; if you do not have a proper gpu device</span></span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">install_sjSDM</span>(<span class="at">version =</span> <span class="fu">c</span>(<span class="st">&quot;gpu&quot;</span>)) <span class="co"># or &quot;cpu&quot; if you do not have a proper gpu device</span></span></code></pre></div>
 <p>Reload the package and run the example, if this doesn’t work:</p>
 <ul>
 <li>Restart RStudio</li>
@@ -411,16 +417,15 @@ version</a></p>
 </div>
 <div id="windows---manual-installation" class="section level2">
 <h2>Windows - manual installation:</h2>
-<p>Download and install the latest <a href="https://www.anaconda.com/products/distribution">‘conda’
-version</a></p>
+<p>Download and install the latest <a href="https://www.anaconda.com/download/">‘conda’ version</a></p>
 <p>Open the command window (cmd.exe - hit windows key + r and write
 cmd)</p>
 <p>Run in cmd.exe:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">conda</span> create <span class="at">--name</span> r-sjsdm python=3.7</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">conda</span> activate r-sjsdm</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="ex">conda</span> install pytorch torchvision cpuonly <span class="at">-c</span> pytorch <span class="co"># cpu</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="ex">conda</span> install pytorch torchvision cudatoolkit=11.3 <span class="at">-c</span> pytorch <span class="co">#gpu</span></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install pyro-ppl torch_optimizer madgrad</span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="ex">conda</span> create <span class="at">--name</span> r-sjsdm python=3.7</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="ex">conda</span> activate r-sjsdm</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="ex">conda</span> install pytorch torchvision cpuonly <span class="at">-c</span> pytorch <span class="co"># cpu</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="ex">conda</span> install pytorch torchvision cudatoolkit=11.3 <span class="at">-c</span> pytorch <span class="co">#gpu</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install pyro-ppl torch_optimizer madgrad</span></code></pre></div>
 <p>Restart R, try to run the example, and if this doesn’t work:</p>
 <ul>
 <li>Restart RStudio</li>
@@ -430,7 +435,7 @@ cmd)</p>
 <div id="linux---automatic-installation" class="section level2">
 <h2>Linux - automatic installation:</h2>
 <p>Run in R:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">install_sjSDM</span>(<span class="at">version =</span> <span class="fu">c</span>(<span class="st">&quot;gpu&quot;</span>)) <span class="co"># or &quot;cpu&quot; if you do not have a proper gpu device</span></span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">install_sjSDM</span>(<span class="at">version =</span> <span class="fu">c</span>(<span class="st">&quot;gpu&quot;</span>)) <span class="co"># or &quot;cpu&quot; if you do not have a proper gpu device</span></span></code></pre></div>
 <p>Restart R try to run the example, if this doesn’t work:</p>
 <ul>
 <li>Restart RStudio</li>
@@ -442,14 +447,13 @@ cmd)</p>
 <p>We strongly advise to use a ‘conda’ environment but a virtual
 environment should also work. The only requirement is that it is named
 ‘r-sjsdm’</p>
-<p>Download and install the latest <a href="https://www.anaconda.com/products/distribution">‘conda’
-version</a></p>
+<p>Download and install the latest <a href="https://www.anaconda.com/download/">‘conda’ version</a></p>
 <p>Open your terminal and run:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">conda</span> create <span class="at">--name</span> r-sjsdm python=3.7</span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ex">conda</span> activate r-sjsdm</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="ex">conda</span> install pytorch torchvision cpuonly <span class="at">-c</span> pytorch <span class="co"># cpu</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="ex">conda</span> install pytorch torchvision cudatoolkit=11.3 <span class="at">-c</span> pytorch <span class="co">#gpu</span></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install pyro-ppl torch_optimizer madgrad</span></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="ex">conda</span> create <span class="at">--name</span> r-sjsdm python=3.7</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="ex">conda</span> activate r-sjsdm</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="ex">conda</span> install pytorch torchvision cpuonly <span class="at">-c</span> pytorch <span class="co"># cpu</span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="ex">conda</span> install pytorch torchvision cudatoolkit=11.3 <span class="at">-c</span> pytorch <span class="co">#gpu</span></span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install pyro-ppl torch_optimizer madgrad</span></code></pre></div>
 <p>Restart R try to run the example, if this doesn’t work:</p>
 <ul>
 <li>Restart RStudio</li>
@@ -459,7 +463,7 @@ version</a></p>
 <div id="macos---automatic-installation" class="section level2">
 <h2>MacOS - automatic installation:</h2>
 <p>Run in R:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">install_sjSDM</span>()</span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">install_sjSDM</span>()</span></code></pre></div>
 <p>Restart R try to run the example, if this doesn’t work:</p>
 <ul>
 <li>Restart RStudio</li>
@@ -471,13 +475,12 @@ version</a></p>
 <p>We strongly advise to use a ‘conda’ environment but a virtual
 environment should also work. The only requirement is that it is named
 ‘r-sjsdm’</p>
-<p>Download and install the latest conda <a href="https://www.anaconda.com/products/distribution">conda
-version</a></p>
+<p>Download and install the latest conda <a href="https://www.anaconda.com/download/">conda version</a></p>
 <p>Open your terminal and run:</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">conda</span> create <span class="at">--name</span> r-sjsdm python=3.7</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="ex">conda</span> activate r-sjsdm</span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install torch torchvision torchaudio </span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install pyro-ppl torch_optimizer madgrad</span></code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="ex">conda</span> create <span class="at">--name</span> r-sjsdm python=3.7</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a><span class="ex">conda</span> activate r-sjsdm</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install torch torchvision torchaudio </span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install pyro-ppl torch_optimizer madgrad</span></code></pre></div>
 <p>Restart R try to run the example, if this doesn’t work:</p>
 <ul>
 <li>Restart RStudio</li>
@@ -497,13 +500,13 @@ tracker</a></li>
 </div>
 <div id="example" class="section level2">
 <h2>Example</h2>
-<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(sjSDM)</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>community <span class="ot">&lt;-</span> <span class="fu">simulate_SDM</span>(<span class="at">sites =</span> <span class="dv">100</span>, <span class="at">species =</span> <span class="dv">10</span>, <span class="at">env =</span> <span class="dv">5</span>)</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>Env <span class="ot">&lt;-</span> community<span class="sc">$</span>env_weights</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>Occ <span class="ot">&lt;-</span> community<span class="sc">$</span>response</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>model <span class="ot">&lt;-</span> <span class="fu">sjSDM</span>(<span class="at">Y =</span> Occ, <span class="at">env =</span> <span class="fu">linear</span>(Env, <span class="sc">~</span><span class="dv">0</span><span class="sc">+</span>X1<span class="sc">*</span>X2 <span class="sc">+</span> X3 <span class="sc">+</span> X4))</span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model)</span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">library</span>(sjSDM)</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>community <span class="ot">&lt;-</span> <span class="fu">simulate_SDM</span>(<span class="at">sites =</span> <span class="dv">100</span>, <span class="at">species =</span> <span class="dv">10</span>, <span class="at">env =</span> <span class="dv">5</span>)</span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>Env <span class="ot">&lt;-</span> community<span class="sc">$</span>env_weights</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a>Occ <span class="ot">&lt;-</span> community<span class="sc">$</span>response</span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a></span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a>model <span class="ot">&lt;-</span> <span class="fu">sjSDM</span>(<span class="at">Y =</span> Occ, <span class="at">env =</span> <span class="fu">linear</span>(Env, <span class="sc">~</span><span class="dv">0</span><span class="sc">+</span>X1<span class="sc">*</span>X2 <span class="sc">+</span> X3 <span class="sc">+</span> X4))</span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="fu">summary</span>(model)</span></code></pre></div>
 </div>
 
 

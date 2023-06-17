@@ -2,7 +2,9 @@ import numpy as np
 import torch
 import itertools
 import sys
+import random
 from .utils_fa import covariance
+from .utils_fa import set_seed
 from typing import Union, Tuple, List, Optional, Callable
 from tqdm import tqdm
 from torch import nn, optim
@@ -10,8 +12,9 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
+
 class Model_sjSDM:
-    def __init__(self, device: str = "cpu", dtype: str = "float32"):
+    def __init__(self, device: str = "cpu", dtype: str = "float32", seed: int = 42):
         """sjSDM constructor
 
         Args:
@@ -19,6 +22,10 @@ class Model_sjSDM:
             dtype (str, optional): Dtype. Defaults to "float32".
 
         """
+        
+        
+        self.seed = seed
+        set_seed(seed)
         self.params = []
         self.losses = []
         self.env = None
@@ -333,11 +340,11 @@ class Model_sjSDM:
 
         """              
         
-        if self.device.type == 'cuda' and torch.cuda.is_available():
+        if (self.device.type == 'cuda' and torch.cuda.is_available()) or self.device.type == "mps":
             #torch.set_default_tensor_type('torch.cuda.FloatTensor')
-            self.env.cuda(self.device) # type: ignore
+            self.env.to(self.device) # type: ignore
             if self.spatial is not None:
-                self.spatial.cuda(self.device) # type: ignore
+                self.spatial.to(self.device) # type: ignore
         else:
             torch.set_default_tensor_type('torch.FloatTensor')
         
@@ -405,7 +412,7 @@ class Model_sjSDM:
         df = self.df
         alpha = self.alpha
         
-        if self.device.type == 'cuda': # type: ignore
+        if self.device.type == 'cuda' or self.device.type == 'mps': # type: ignore
             device = self.device.type+ ":" + str(self.device.index) # type: ignore
         else:
             device = 'cpu'
@@ -532,7 +539,7 @@ class Model_sjSDM:
         torch.cuda.empty_cache()
         any_losses = len(self.losses) > 0
 
-        if self.device.type == 'cuda': # type: ignore
+        if self.device.type == 'cuda' or self.device.type == "mps": # type: ignore
             device = self.device.type+ ":" + str(self.device.index) # type: ignore
         else:
             device = 'cpu'
@@ -598,7 +605,7 @@ class Model_sjSDM:
         loss_function = self._build_loss_function(train = False, raw=not link, simulate=simulate)
 
         pred = []
-        if self.device.type == 'cuda': # type: ignore
+        if self.device.type == 'cuda' or self.device.type == "mps": # type: ignore
             device = self.device.type+ ":" + str(self.device.index) # type: ignore
         else:
             device = 'cpu'
@@ -662,7 +669,7 @@ class Model_sjSDM:
         weights_base = np.transpose(self.env_weights[0])
         y_dim = Y.shape[1]
 
-        if self.device.type == 'cuda':
+        if self.device.type == 'cuda' or self.device.type == "mps":
             device = self.device.type+ ":" + str(self.device.index)
         else:
             device = 'cpu'
@@ -835,7 +842,7 @@ class Model_sjSDM:
 
         if train:
             if self.link == "logit" or self.link == "probit":
-                @torch.jit.script
+                #@torch.jit.script
                 def tmp(mu: torch.Tensor, Ys: torch.Tensor, sigma: torch.Tensor, batch_size: int, sampling: int, df: int, alpha: float, device: str, dtype: torch.dtype):
                     noise = torch.randn(size = [sampling, batch_size, df], device=torch.device(device), dtype=dtype)
                     E = torch.sigmoid(   torch.einsum("ijk, lk -> ijl", [noise, sigma]).add(mu).mul(alpha)   ).mul(0.999999).add(0.0000005)
@@ -845,7 +852,7 @@ class Model_sjSDM:
                     loss = Eprob.log().neg().sub(maxlogprob)
                     return loss
             elif self.link == "linear":
-                @torch.jit.script
+                #@torch.jit.script
                 def tmp(mu: torch.Tensor, Ys: torch.Tensor, sigma: torch.Tensor, batch_size: int, sampling: int, df: int, alpha: float, device: str, dtype: torch.dtype):
                     noise = torch.randn(size = [sampling, batch_size, df], device=torch.device(device), dtype=dtype)
                     E = torch.clamp(torch.einsum("ijk, lk -> ijl", [noise, sigma]).add(mu).mul(alpha), 0.0, 1.0).mul(0.999999).add(0.0000005)
@@ -910,13 +917,12 @@ class Model_sjSDM:
                     noise = torch.randn(size = [sampling, batch_size, df], device=torch.device(device), dtype=dtype)
                     E = torch.sigmoid(   torch.einsum("ijk, lk -> ijl", [noise, sigma]).add(mu).mul(alpha)   ).mul(0.999999).add(0.0000005)
                     logprob = E.log().mul(Ys).add((1.0 - E).log().mul(1.0 - Ys)).neg()#.sum(dim = 2).neg()
-                    Prop = logprob/logprob.sum(dim = 2).reshape([sampling, batch_size, 1])
                     logprob = logprob.sum(dim = 2).neg()
                     maxlogprob = logprob.max(dim = 0).values
                     Eprob = logprob.sub(maxlogprob).exp().mean(dim = 0)
                     return Eprob.log().neg().sub(maxlogprob).reshape([batch_size, 1])
             elif self.link == "linear":
-                @torch.jit.script
+                #@torch.jit.script
                 def tmp(mu: torch.Tensor, Ys: torch.Tensor, sigma: torch.Tensor, batch_size: int, sampling: int, df: int, alpha: float, device: str, dtype: torch.dtype):
                     noise = torch.randn(size = [sampling, batch_size, df], device=torch.device(device), dtype=dtype)
                     E = torch.clamp(torch.einsum("ijk, lk -> ijl", [noise, sigma]).add(mu).mul(alpha), 0.0, 1.0).mul(0.999999).add(0.0000005)
