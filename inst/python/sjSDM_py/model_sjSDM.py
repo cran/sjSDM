@@ -390,7 +390,8 @@ class Model_sjSDM:
             epochs: int = 100, 
             sampling: int = 100, 
             parallel: int = 0,
-            early_stopping_training: int = -1) -> None:
+            early_stopping_training: int = -1,
+            verbose: bool = True) -> None:
         """Fit sjSDM model
 
         Args:
@@ -439,7 +440,11 @@ class Model_sjSDM:
                 self.optimizer.step()
 
         desc='loss: Inf'
-        ep_bar = tqdm(range(epochs),bar_format= "Iter: {n_fmt}/{total_fmt} {l_bar}{bar}| [{elapsed}, {rate_fmt}{postfix}]", file=sys.stdout)
+        if verbose:
+            ep_bar = tqdm(range(epochs),bar_format= "Iter: {n_fmt}/{total_fmt} {l_bar}{bar}| [{elapsed}, {rate_fmt}{postfix}]", file=sys.stdout)
+        else:
+            ep_bar = range(epochs)
+            
         if type(SP) is np.ndarray:
             for epoch in ep_bar:
                 for step, (x, y, sp) in enumerate(dataLoader):
@@ -459,7 +464,8 @@ class Model_sjSDM:
                     batch_loss[step] = loss.item()
                 bl = np.mean(batch_loss)
                 bl = np.round(bl, 3)
-                ep_bar.set_postfix(loss=f'{bl}')
+                if verbose:
+                    ep_bar.set_postfix(loss=f'{bl}')
 
                 self.history[epoch] = bl
                 if self.useSched:
@@ -492,7 +498,8 @@ class Model_sjSDM:
                     batch_loss[step] = loss.item()
                 bl = np.mean(batch_loss)
                 bl = np.round(bl, 3)
-                ep_bar.set_postfix(loss=f'{bl}')
+                if verbose:
+                    ep_bar.set_postfix(loss=f'{bl}')
                 self.history[epoch] = bl
                 if self.useSched:
                     self.scheduler.step(bl)
@@ -649,7 +656,8 @@ class Model_sjSDM:
            SP: Optional[np.ndarray] = None, 
            batch_size: int = 25, 
            parallel: int = 0, 
-           sampling: int = 100) -> List[np.ndarray]:
+           sampling: int = 100,
+           verbose: bool = True) -> List[np.ndarray]:
         """Calculate standard errors for environmental coefficients
 
         Args:
@@ -677,8 +685,11 @@ class Model_sjSDM:
         _ = sys.stdout.write("\nCalculating standard errors...\n")
 
         desc='loss: Inf'
-        sp_bar = tqdm(range(Y.shape[1]),bar_format= "Species: {n_fmt}/{total_fmt} {l_bar}{bar}| [{elapsed}, {rate_fmt}]", file=sys.stdout)
-
+        if verbose:
+            sp_bar = tqdm(range(Y.shape[1]),bar_format= "Species: {n_fmt}/{total_fmt} {l_bar}{bar}| [{elapsed}, {rate_fmt}]", file=sys.stdout)
+        else:
+            sp_bar = range(Y.shape[1])
+        
         if type(SP) is np.ndarray:
             for i in sp_bar:
                 weights = torch.tensor(weights_base[:,i].reshape([-1,1]), device=self.device, dtype=self.dtype, requires_grad=True).to(self.device)
@@ -707,7 +718,7 @@ class Model_sjSDM:
                         hessian_out = hessian
                     else:
                         hessian_out += hessian
-                se.append(torch.sqrt(torch.diag(torch.inverse(hessian_out))).data.cpu().numpy())
+                se.append(torch.sqrt(torch.diag(torch.inverse(hessian_out+0.001))).data.cpu().numpy())
             return se                
         else:
             for i in sp_bar:
@@ -736,7 +747,7 @@ class Model_sjSDM:
                         hessian_out = hessian
                     else:
                         hessian_out += hessian
-                se.append(torch.sqrt(torch.diag(torch.inverse(hessian_out))).data.cpu().numpy())
+                se.append(torch.sqrt(torch.diag(torch.inverse(hessian_out+0.001))).data.cpu().numpy())
             return se
 
     def _build_cov_constrain_function(self, 
@@ -883,7 +894,7 @@ class Model_sjSDM:
 
             elif self.link == "normal":
                 def tmp(mu: torch.Tensor, Ys: torch.Tensor, sigma: torch.Tensor, batch_size: int, sampling: int, df: int, alpha: float, device: str, dtype: torch.dtype):
-                    return torch.distributions.MultivariateNormal(loc=mu, covariance_matrix=sigma.matmul(sigma.t()).add(torch.eye(sigma.shape[0]))).log_prob(Ys).neg()
+                    return torch.distributions.MultivariateNormal(loc=mu, covariance_matrix=sigma.matmul(sigma.t()).add(torch.eye(sigma.shape[0], device=torch.device(device), dtype=dtype))).log_prob(Ys).neg()
         else:
             if self.link == "probit": 
                 link_func = lambda value: torch.distributions.Normal(0.0, 1.0).cdf(value)
@@ -954,7 +965,7 @@ class Model_sjSDM:
 
             elif self.link == "normal":
                 def tmp(mu: torch.Tensor, Ys: torch.Tensor, sigma: torch.Tensor, batch_size: int, sampling: int, df: int, alpha: float, device: str, dtype: torch.dtype):
-                    return torch.distributions.MultivariateNormal(loc=mu, covariance_matrix=sigma.matmul(sigma.t()).add(torch.eye(sigma.shape[0]))).log_prob(Ys).neg()
+                    return torch.distributions.MultivariateNormal(loc=mu, covariance_matrix=sigma.matmul(sigma.t()).add(torch.eye(sigma.shape[0]), device=device, dtype=dtype )).log_prob(Ys).neg()
 
         return tmp
 

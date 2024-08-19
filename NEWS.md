@@ -1,3 +1,10 @@
+# sjSDM 1.0.6
+## New features
+* Datasets: butterflies and eucalypt species
+* Conditional predictions
+* Assembly regression plots
+
+
 # sjSDM 1.0.5
 ## New features
 * Pass custom test indices to sjSDM function via CV argument

@@ -29,7 +29,7 @@ plot.sjSDM = function(x, ...) {
 #' @import ggplot2
 #' @param object a model fitted by \code{\link{sjSDM}} 
 #' @param wrap_col Scales argument passed to wrap_col
-#' @param group Define the taxonomic characteristics of a species, you need to provide a dataframe with column1 named “species” and column2 named “group”, default is NULL. For example, group[1,1]== "sp1", group[1,2]== "Mammal".
+#' @param group Define the taxonomic characteristics of a species, you need to provide a dataframe with column1 named “species” and column2 named “group”, default is NULL. For example, `group[1,1]== "sp1"`, `group[1,2]== "Mammal"`.
 #' @param col Define colors for groups, default is NULL.
 #' @param slist Select the species you want to plot, default is all, parameter is not supported yet.
 #' @example /inst/examples/plot.sjSDM-example.R
@@ -43,7 +43,7 @@ plotsjSDMcoef = function(object,wrap_col=NULL,group=NULL,col=NULL,slist=NULL) {
     inherits(object$settings$env, "linear")
   )
   oldpar = par(no.readonly = TRUE)
-  on.exit(par(oldpar))
+  on.exit(suppressWarnings(par(oldpar)))
   
   if(is.null(object$se)) object=getSe(object)
   summary.se = summary(object)
