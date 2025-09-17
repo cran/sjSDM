@@ -178,7 +178,7 @@ sjSDM = function(Y = NULL,
   
   seed = as.integer(seed)
   
-  if( any(apply(Y, 2, var) < .Machine$double.eps) ) warning("No variation in at least one of Y columns detected!")
+  if( any(apply(Y, 2, function(x) var(x, na.rm = TRUE)) < .Machine$double.eps) ) warning("No variation in at least one of Y columns detected!")
   
   if(inherits(family, "character")) {
     if(family == "nbinom") {
@@ -317,7 +317,7 @@ sjSDM = function(Y = NULL,
   out$sessionInfo = utils::sessionInfo()
   out$weights = force_r(model$env_weights)
   out$sigma = force_r(model$get_sigma)
-  if(out$family$family$family== "nbinom") out$theta = force_r(model$get_theta)
+  if(out$family$family$family== "nbinom" || out$family$family$family== "gaussian" ) out$theta = force_r(model$get_theta)
   out$history = force_r(model$history)
   out$spatial_weights = force_r(model$spatial_weights)
   out$spatial = spatial
